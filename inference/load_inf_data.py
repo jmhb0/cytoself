@@ -115,6 +115,8 @@ def load_inf_dataset52(dir_fovs, DO_VIZ=True):
 if __name__ == "__main__":
 	dir_fovs = "/hpc/instruments/leonetti.dragonfly/infected-cell-microscopy/TICM052-1/raw_data"
 	dir_fovs = "/hpc/instruments/leonetti.dragonfly/infected-cell-microscopy/TICM048-1/raw_data"
+	# this one is from the reviews responses
+	dir_fovs = "/hpc/instruments/leonetti.dragonfly/Chad/TICM0057-1/raw_data"
 	load_inf_dataset52(dir_fovs=dir_fovs, DO_VIZ=True)
 
 

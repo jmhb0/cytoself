@@ -26,25 +26,26 @@ from collections import Counter
 from sklearn.decomposition import PCA
 
 VERSION = 0
+# VERSION = 2
 
-# protein_filter = dict(
-#     # GLT8D1=[1, 2, 4, 11, 13, 18, 52, 64, 96, 97],
-#     GLT8D1=[2, 4, 11, 18, 52, 64, 96, 97],
-#     # GLT8D1=[97],
-#     MFSD5=[
-#         0, 2, 8, 12, 13, 15, 21, 22, 24, 25, 40, 42, 44, 46, 48, 51, 57, 67,
-#         68, 71, 73, 75, 77, 78, 86, 89, 92, 94, 96, 97, 98, 99
-#     ],
-#     MPZL1=[
-#         19, 24, 26, 27, 39, 35, 36, 39, 40, 41, 42, 45, 46, 47, 48, 49, 50, 51,
-#         53, 54, 55, 56, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80, 81, 85, 86, 87,
-#         88, 89, 91, 93, 94, 95, 97
-#     ],
-#     TSPAN3=[
-#         0, 1, 23, 8, 9, 10, 11, 12, 13, 15, 19, 21, 22, 29, 30, 31, 32, 33, 34,
-#         37, 39, 40, 42, 43, 44, 45, 49, 51, 52, 54, 63, 64, 90, 92, 98
-#     ],
-# )
+protein_filter = dict(
+    # GLT8D1=[1, 2, 4, 11, 13, 18, 52, 64, 96, 97],
+    GLT8D1=[2, 4, 11, 18, 52, 64, 96, 97],
+    # GLT8D1=[97],
+    MFSD5=[
+        0, 2, 8, 12, 13, 15, 21, 22, 24, 25, 40, 42, 44, 46, 48, 51, 57, 67,
+        68, 71, 73, 75, 77, 78, 86, 89, 92, 94, 96, 97, 98, 99
+    ],
+    MPZL1=[
+        19, 24, 26, 27, 39, 35, 36, 39, 40, 41, 42, 45, 46, 47, 48, 49, 50, 51,
+        53, 54, 55, 56, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80, 81, 85, 86, 87,
+        88, 89, 91, 93, 94, 95, 97
+    ],
+    TSPAN3=[
+        0, 1, 23, 8, 9, 10, 11, 12, 13, 15, 19, 21, 22, 29, 30, 31, 32, 33, 34,
+        37, 39, 40, 42, 43, 44, 45, 49, 51, 52, 54, 63, 64, 90, 92, 98
+    ],
+)
 
 current_filename = Path(os.path.basename(__file__))
 mito_proteins = np.array([
@@ -78,7 +79,7 @@ def get_nearest_proteins(
         "inference/results"
     ) / current_filename.stem / dir_pretrained_model / f"ckpt_{checkpoint}"
     if VERSION > 0:
-        dir_results = dir_results / f"version{VERSION}"  
+        dir_results = dir_results / f"version{VERSION}"
     dir_results.mkdir(exist_ok=True, parents=True)
 
     dir_viz = dir_results
@@ -119,10 +120,8 @@ def get_nearest_proteins(
     if combine_inference_wells:
         protein_label_inf = df_meta_inf['protein'].values
         sort_key = None
-        ipdb.set_trace()
         df_inf_lookup = df_inf_lookup.sort_values(
-            by='protein'
-        )#.iloc[::2]  # we'll have an assert check that this is fine
+            by='protein').drop_duplicates(subset='protein', keep='first')
     else:
         protein_label_inf = df_meta_inf['well_id'].values
         sort_key = custom_sort_key
@@ -333,11 +332,13 @@ def get_embeds_and_crops(
         embeds = torch.stack(embeds)
 
         if "2023" in dir_pretrained_model:
-           dir_opencell_test = Path("data/test_dataset_metadata")
+            dir_opencell_test = Path("data/test_dataset_metadata")
         elif "2024" in dir_pretrained_model:
-            dir_opencell_test = Path("data/test_dataset_metadata_v1/data/opencell_crops_processed2/")
+            dir_opencell_test = Path(
+                "data/test_dataset_metadata_v1/data/opencell_crops_processed2/"
+            )
         else:
-            raise 
+            raise
 
         crops_opencell = np.load(
             dir_opencell_test /
@@ -383,8 +384,9 @@ def get_embeds_and_crops(
         if VERSION == 0:
             df_meta_inf = pd.read_csv(dir_embeddings / "crops_meta.csv")
         elif VERSION > 0:
-            df_meta_inf = pd.read_csv(dir_embeddings / f"crops_meta_v{VERSION}.csv")
-        else: 
+            df_meta_inf = pd.read_csv(dir_embeddings /
+                                      f"crops_meta_v{VERSION}.csv")
+        else:
             raise ValueError()
 
         df_annotations = pd.read_csv(fname_annotations)
@@ -398,19 +400,26 @@ def get_embeds_and_crops(
         df_meta_inf['fov_id'] = [
             Path(f).stem.split("_")[-2] for f in df_meta_inf['fname_pro']
         ]
+        # df_meta_inf = df_meta_inf.merge(df_annotations,
+        #                                 how='left',
+        #                                 left_on='well_id',
+        #                                 right_on='well_id_new')
         df_meta_inf = df_meta_inf.merge(df_annotations,
                                         how='left',
                                         left_on='well_id',
-                                        right_on='well_id_new')
-        # manually add these things on in df_lookup 
-        df_meta_inf.loc[df_meta_inf['well_id']=="H5", 'protein'] = 'well_H5_protein'
-        df_meta_inf.loc[df_meta_inf['well_id']=="H8", 'protein'] = 'well_H8_protein'
+                                        right_on='well_id')
+        
+        # # manually add these things on in df_lookup
+        # df_meta_inf.loc[df_meta_inf['well_id'] == "H5",
+        #                 'protein'] = 'well_H5_protein'
+        # df_meta_inf.loc[df_meta_inf['well_id'] == "H8",
+        #                 'protein'] = 'well_H8_protein'
 
         df_inf_lookup = get_df_inf_lookup(df_meta_inf)
 
+
         assert df_meta_inf.shape[0] == embeds.shape[1]
-        
-        # ipdb.set_trace()
+
 
         return embeds, labels_inf, crops_inf, df_meta_inf, df_annotations, df_inf_lookup
 
@@ -487,9 +496,10 @@ def find_nearest_analysis(embeds_consensus_opencell,
         embeds_compare = np.concatenate(
             (embeds_consensus_opencell, embeds_consensus_inf))
         prots_compare = np.concatenate((df_opencell_lookup['prot_id'].values,
-                                   df_inf_lookup['protein'].values))
-        loc_grade1_compare = np.concatenate((df_opencell_lookup['loc_grade1'].values,
-            np.array(["ORF"]*len(df_opencell_lookup))))
+                                        df_inf_lookup['protein'].values))
+        loc_grade1_compare = np.concatenate(
+            (df_opencell_lookup['loc_grade1'].values,
+             np.array(["ORF"] * len(df_opencell_lookup))))
 
     dist = pairwise_distances(embeds_consensus_inf,
                               embeds_compare,
@@ -499,16 +509,18 @@ def find_nearest_analysis(embeds_consensus_opencell,
     # matrix (n_well_ids_inf, n_prots_opencell), which here is (80,1311)
     dist_argsort = torch.argsort(dist, axis=1)
     if do_compare_orphans:
-        dist_argsort = dist_argsort[:,1:] # nearest will always be itself
+        dist_argsort = dist_argsort[:, 1:]  # nearest will always be itself
     dist_argsort = dist_argsort[:, :k_nearest_prots]
 
-    prots_nearest = prots_compare[dist_argsort]  # (n_well_ids_inf,k_nearest_prots)
+    prots_nearest = prots_compare[
+        dist_argsort]  # (n_well_ids_inf,k_nearest_prots)
     dist_nearest = np.zeros(dist_argsort.shape)
     for i in range(len(dist_nearest)):
         dist_nearest[i] = dist[i, dist_argsort[i]]
     if mode == 'correlation':
         dist_nearest = 1 - dist_nearest
-    loc_grade1_nearest = loc_grade1_compare[dist_argsort]  # (n_well_ids_inf,k_nearest_prots)
+    loc_grade1_nearest = loc_grade1_compare[
+        dist_argsort]  # (n_well_ids_inf,k_nearest_prots)
 
     if return_dists_only:
         return dist, dist_argsort, prots_nearest, loc_grade1_nearest
@@ -960,12 +972,13 @@ def generate_inference_crop_grids(dir_pretrained_model,
 if __name__ == "__main__":
     fname_crops = "inference/results/crop/crops.pt"
     fname_crops_meta = "inference/results/crop/crops_meta.csv"
-    if VERSION>0:
+    if VERSION > 0:
         fname_crops = f"inference/results/crop/crops_v{VERSION}.pt"
         fname_crops_meta = "inference/results/crop/crops_meta_v{VERSION}.csv"
 
     # this file is protein ids and estimates of their annotations
     fname_annotations = "data/cz_infectedcell_finalwellmapping.csv"
+    fname_annotations = "data/cz_infectedcell_finalwellmapping_2024_august_reviews.csv"
     pca_dim = 200
 
     # generate_inference_crop_grids("results/20231218_train_all_no_nucdist_balanced_classes_2",
@@ -983,11 +996,10 @@ if __name__ == "__main__":
         # ["results/20231222_train_all_balanced_classes_1", None],
         # ["results/20231218_train_all_no_nucdist", None],
         # ["results/20231022_train_all", None],
-
         ["results/20240129_train_all_no_nucdist_balanced_classes_1", 36],
         ["results/20240129_train_all_balanced_classes_2", None],
         ["results/20240129_train_all", None],
-        ["results/20240129_train_all_no_nucdist", None], 
+        ["results/20240129_train_all_no_nucdist", None],
     ]
 
     # analyse distances
@@ -996,9 +1008,9 @@ if __name__ == "__main__":
     combine_inference_wells = True
     do_include_nn_losses = False
     do_compare_orphans = True  # when doing kNN's, include the orphans in the new orphans in the lookup
-    do_filtering = False # now set to true because we use the intesnity based filtering
+    do_filtering = True # now set to true because we use the intesnity based filtering
 
-    do_visualize_knns = False # create an image for each protein visualizing nearest-neighbors
+    do_visualize_knns = False  # create an image for each protein visualizing nearest-neighbors
     # combine_augmented_embeddings = False
 
     # for representation in ('vqvec2', 'hist'):
@@ -1013,15 +1025,14 @@ if __name__ == "__main__":
                         'correlation',
                         'euclidean',
                 ):
-                    # if we have VERSION==2 then the filtering is done ahead of time 
+                    # if we have VERSION==2 then the filtering is done ahead of time
                     for do_filtering in (
-                            False,
-                            # True, 
-                            ):
-                        for combine_augmented_embeddings in (
-                                False,
-                                # True, 
-                                ):
+                                        # False,
+                                         True,
+                                         ):
+                        for combine_augmented_embeddings in (False,
+                                                             # True,
+                                                             ):
                             get_nearest_proteins(
                                 fname_crops=fname_crops,
                                 fname_crops_meta=fname_crops_meta,
@@ -1038,4 +1049,3 @@ if __name__ == "__main__":
                                 do_include_nn_losses=do_include_nn_losses,
                                 do_compare_orphans=do_compare_orphans,
                                 mode=mode)
-
